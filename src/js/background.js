@@ -1,32 +1,21 @@
 // Timer state
 let timerState = null;
-let timerInterval = null;
 
 // Initialize timer state from storage
 chrome.storage.local.get(['timerState'], (result) => {
     if (result.timerState) {
         timerState = result.timerState;
-        if (timerState.startTime && !timerState.isPaused) {
-            startBackgroundTimer();
-        }
     }
 });
 
-function startBackgroundTimer() {
-    if (timerInterval) {
-        clearInterval(timerInterval);
-    }
+function calculateElapsedTime(state) {
+    if (!state.startTime) return state.elapsedTime || 0;
     
-    timerInterval = setInterval(() => {
-        if (timerState && timerState.startTime && !timerState.isPaused) {
-            const now = Date.now();
-            const startTime = new Date(timerState.startTime).getTime();
-            const lastUpdate = new Date(timerState.lastUpdateTime).getTime();
-            timerState.elapsedTime += now - lastUpdate;
-            timerState.lastUpdateTime = new Date(now).toISOString();
-            chrome.storage.local.set({ timerState });
-        }
-    }, 60000); // Update every minute
+    const startTime = new Date(state.startTime).getTime();
+    const now = Date.now();
+    const baseElapsed = state.elapsedTime || 0;
+    
+    return baseElapsed + (now - startTime);
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -39,18 +28,34 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     
     // Handle timer state messages
     if (request.action === 'getTimerState') {
-        sendResponse({ timerState });
+        if (timerState) {
+            // Calculate current elapsed time before sending
+            const currentState = {
+                ...timerState,
+                elapsedTime: calculateElapsedTime(timerState)
+            };
+            sendResponse({ timerState: currentState });
+        } else {
+            sendResponse({ timerState: null });
+        }
         return true;
     }
     
     if (request.action === 'updateTimerState') {
-        timerState = request.state;
-        if (timerState.startTime && !timerState.isPaused) {
-            startBackgroundTimer();
-        } else if (timerInterval) {
-            clearInterval(timerInterval);
+        if (request.state === null) {
+            // Clear timer state
+            timerState = null;
+            chrome.storage.local.remove('timerState');
+        } else {
+            timerState = request.state;
+            if (timerState) {
+                // Store the current timestamp when starting
+                if (!timerState.startTime) {
+                    timerState.startTime = new Date().toISOString();
+                }
+            }
+            chrome.storage.local.set({ timerState });
         }
-        chrome.storage.local.set({ timerState });
         sendResponse({ success: true });
         return true;
     }

@@ -2,7 +2,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // DOM Elements
     const timeDisplay = document.getElementById('timeDisplay');
     const startBtn = document.getElementById('startBtn');
-    const pauseBtn = document.getElementById('pauseBtn');
     const stopBtn = document.getElementById('stopBtn');
     const submitAllBtn = document.getElementById('submitAllBtn');
     const timeLogsList = document.getElementById('timeLogsList');
@@ -18,158 +17,123 @@ document.addEventListener('DOMContentLoaded', () => {
     const editEndTime = document.getElementById('editEndTime');
     const saveEditBtn = document.getElementById('saveEditBtn');
     const cancelEditBtn = document.getElementById('cancelEditBtn');
+    const closeModalBtn = document.getElementById('closeModal');
 
     // Timer state
-    let startTime = null;
-    let elapsedTime = 0;
-    let timerInterval = null;
-    let isPaused = false;
-    let currentTimeLog = null;
+    let timerState = {
+        elapsedTime: 0,
+        startTime: null
+    };
+
+    // Activity state
     let timeLogs = [];
     let lastUpdateTime = null;
 
     // Load saved time logs and get timer state from background
     chrome.storage.local.get(['timeLogs'], (result) => {
-        timeLogs = result.timeLogs || [];
-        renderTimeLogs();
+        if (result.timeLogs) {
+            timeLogs = result.timeLogs;
+            renderTimeLogs();
+        }
         updateSubmitButton();
     });
 
     // Get timer state from background service worker
     chrome.runtime.sendMessage({ action: 'getTimerState' }, (response) => {
-        if (response && response.timerState) {
-            const state = response.timerState;
-            startTime = state.startTime ? new Date(state.startTime) : null;
-            elapsedTime = state.elapsedTime || 0;
-            isPaused = state.isPaused || false;
-            currentTimeLog = state.currentTimeLog || null;
-            lastUpdateTime = state.lastUpdateTime ? new Date(state.lastUpdateTime) : null;
-
-            if (startTime && !isPaused) {
-                // Resume the timer
-                startBtn.disabled = true;
-                pauseBtn.disabled = false;
-                stopBtn.disabled = false;
-                submitAllBtn.disabled = true;
+        if (response.timerState) {
+            timerState = response.timerState;
+            updateTimerDisplay();
+            updateButtonStates();
+            // Hide inputs if timer is running
+            if (timerState.startTime) {
                 timerInputs.classList.add('hidden');
-                timeDisplay.classList.add('active-timer');
-                if (currentTimeLog) {
-                    ticketIdInput.value = currentTimeLog.ticketId || '';
-                    descriptionInput.value = currentTimeLog.description || '';
-                }
-                timerInterval = setInterval(updateTimer, 60000);
-                updateTimerDisplay(elapsedTime);
-            } else if (startTime && isPaused) {
-                // Show paused state
-                startBtn.disabled = false;
-                pauseBtn.disabled = true;
-                stopBtn.disabled = false;
-                submitAllBtn.disabled = true;
-                timerInputs.classList.add('hidden');
-                if (currentTimeLog) {
-                    ticketIdInput.value = currentTimeLog.ticketId || '';
-                    descriptionInput.value = currentTimeLog.description || '';
-                }
-                updateTimerDisplay(elapsedTime);
             }
         }
     });
 
     function updateTimerState() {
         const state = {
-            startTime: startTime ? startTime.toISOString() : null,
-            elapsedTime,
-            isPaused,
-            currentTimeLog,
-            lastUpdateTime: lastUpdateTime ? lastUpdateTime.toISOString() : null
+            startTime: timerState.startTime ? new Date(timerState.startTime).toISOString() : null,
+            elapsedTime: timerState.elapsedTime,
+            currentTimeLog: null,
+            lastUpdateTime: lastUpdateTime ? new Date(lastUpdateTime).toISOString() : null
         };
         chrome.runtime.sendMessage({ action: 'updateTimerState', state });
     }
 
     function startTimer() {
-        if (!startTime) {
-            startTime = roundToNearestMinute(new Date());
-            elapsedTime = 0;
+        if (!timerState.startTime) {
+            timerState.startTime = new Date().toISOString();
+            timerState.elapsedTime = 0;
             lastUpdateTime = Date.now();
-            currentTimeLog = {
-                startTime: new Date(startTime),
-                endTime: null,
-                duration: 0,
-                ticketId: ticketIdInput.value.trim(),
-                description: descriptionInput.value.trim()
-            };
             timerInputs.classList.add('hidden');
             timeDisplay.classList.add('active-timer');
-        } else if (isPaused) {
-            lastUpdateTime = Date.now();
-            timeDisplay.classList.add('active-timer');
-        }
-        
-        timerInterval = setInterval(updateTimer, 60000);
-        startBtn.disabled = true;
-        pauseBtn.disabled = false;
-        stopBtn.disabled = false;
-        submitAllBtn.disabled = true;
-        isPaused = false;
-        updateTimerDisplay(0);
-        updateTimerState();
-    }
 
-    function pauseTimer() {
-        clearInterval(timerInterval);
-        const now = Date.now();
-        elapsedTime += now - lastUpdateTime;
-        isPaused = true;
-        startBtn.disabled = false;
-        pauseBtn.disabled = true;
-        timeDisplay.classList.remove('active-timer');
-        updateTimerState();
+            updateTimerDisplay();
+            updateButtonStates();
+            updateTimerState();
+        }
     }
 
     function stopTimer() {
-        clearInterval(timerInterval);
-        const endTime = roundToNearestMinute(new Date());
-        const now = Date.now();
-        elapsedTime += now - lastUpdateTime;
-        
-        if (currentTimeLog) {
-            currentTimeLog.endTime = new Date(endTime);
-            currentTimeLog.duration = elapsedTime;
-            timeLogs.push(currentTimeLog);
-            chrome.storage.local.set({ timeLogs });
-            renderTimeLogs();
+        if (timerState.startTime) {
+            // Get the final elapsed time from the background
+            chrome.runtime.sendMessage({ action: 'getTimerState' }, (response) => {
+                if (response.timerState) {
+                    const finalElapsedTime = response.timerState.elapsedTime;
+                    
+                    // Record the activity
+                    const timeLog = {
+                        startTime: new Date(timerState.startTime).toISOString(),
+                        endTime: new Date().toISOString(),
+                        duration: finalElapsedTime,
+                        ticketId: ticketIdInput.value.trim(),
+                        description: descriptionInput.value.trim()
+                    };
+                    
+                    timeLogs.push(timeLog);
+                    chrome.storage.local.set({ timeLogs });
+                    renderTimeLogs();
+                    
+                    // Clear timer state in background
+                    chrome.runtime.sendMessage({ 
+                        action: 'updateTimerState', 
+                        state: null 
+                    });
+                    
+                    // Reset local timer state
+                    timerState = {
+                        elapsedTime: 0,
+                        startTime: null
+                    };
+                    
+                    // Clear inputs and show them again
+                    ticketIdInput.value = '';
+                    descriptionInput.value = '';
+                    timerInputs.classList.remove('hidden');
+                    
+                    updateTimerDisplay();
+                    updateButtonStates();
+                }
+            });
         }
-
-        startTime = null;
-        elapsedTime = 0;
-        lastUpdateTime = null;
-        currentTimeLog = null;
-        isPaused = false;
-        updateTimerDisplay(0);
-        startBtn.disabled = false;
-        pauseBtn.disabled = true;
-        stopBtn.disabled = true;
-        timerInputs.classList.remove('hidden');
-        timeDisplay.classList.remove('active-timer');
-        ticketIdInput.value = '';
-        descriptionInput.value = '';
-        updateSubmitButton();
-        
-        // Clear timer state in background
-        chrome.runtime.sendMessage({ action: 'updateTimerState', state: null });
     }
 
-    function updateTimer() {
-        const now = Date.now();
-        const currentElapsed = elapsedTime + (now - lastUpdateTime);
-        updateTimerDisplay(currentElapsed);
-    }
-
-    function updateTimerDisplay(timeInMs) {
-        const hours = Math.floor(timeInMs / 3600000);
-        const minutes = Math.floor((timeInMs % 3600000) / 60000);
+    function updateTimerDisplay() {
+        const totalSeconds = Math.floor(timerState.elapsedTime / 1000);
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
         
-        timeDisplay.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+        if (timerState.startTime) {
+            // Show seconds when timer is active
+            timeDisplay.textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            timeDisplay.classList.add('active-timer');
+        } else {
+            // Hide seconds when timer is not active
+            timeDisplay.textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+            timeDisplay.classList.remove('active-timer');
+        }
     }
 
     function formatDuration(ms) {
@@ -274,7 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateSubmitButton() {
-        const hasActiveTimer = startTime !== null;
+        const hasActiveTimer = timerState.startTime !== null;
         const allLogsComplete = timeLogs.every(log => 
             log.ticketId && 
             log.description && 
@@ -287,7 +251,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Event Listeners
     startBtn.addEventListener('click', startTimer);
-    pauseBtn.addEventListener('click', pauseTimer);
     stopBtn.addEventListener('click', stopTimer);
 
     submitAllBtn.addEventListener('click', async () => {
@@ -327,13 +290,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Utility functions for time handling
-    function roundToNearestMinute(date) {
-        const rounded = new Date(date);
-        rounded.setSeconds(0);
-        rounded.setMilliseconds(0);
-        return rounded;
-    }
-
     function formatTimeForInput(date) {
         return date.toTimeString().slice(0, 5);
     }
@@ -344,4 +300,40 @@ document.addEventListener('DOMContentLoaded', () => {
         date.setHours(hours, minutes, 0, 0);
         return date;
     }
+
+    // Update button states
+    function updateButtonStates() {
+        startBtn.disabled = timerState.startTime !== null;
+        stopBtn.disabled = timerState.startTime === null;
+        submitAllBtn.disabled = timerState.elapsedTime === 0;
+    }
+
+    // Close modal
+    closeModalBtn.addEventListener('click', () => {
+        editModal.classList.add('hidden');
+    });
+
+    // Close modal when clicking outside
+    window.addEventListener('click', (event) => {
+        if (event.target === editModal) {
+            editModal.classList.add('hidden');
+        }
+    });
+
+    // Update timer display every second when active
+    setInterval(() => {
+        if (timerState.startTime) {
+            // Get fresh state from background
+            chrome.runtime.sendMessage({ action: 'getTimerState' }, (response) => {
+                if (response.timerState) {
+                    timerState = response.timerState;
+                    updateTimerDisplay();
+                }
+            });
+        }
+    }, 1000);
+
+    // Initial display update
+    updateTimerDisplay();
+    updateButtonStates();
 }); 
