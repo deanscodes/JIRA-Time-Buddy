@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "JIRA Time Buddy",
+  "version": "1.0.0",
+  "description": "Track and log time against JIRA tickets",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "action": {
+    "default_popup": "src/html/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "options_page": "src/html/settings.html",
+  "background": {
+    "service_worker": "src/js/background.js"
+  },
+  "web_accessible_resources": [{
+    "resources": [
+      "src/css/styles.css",
+      "src/js/popup.js",
+      "src/js/settings.js"
+    ],
+    "matches": ["<all_urls>"]
+  }],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+} 

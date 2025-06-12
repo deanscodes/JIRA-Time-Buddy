@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>JIRA Time Buddy</title>
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>JIRA Time Buddy</h1>
+            <a href="settings.html" target="_blank" class="icon-button">Settings</a>
+        </div>
+
+        <div id="mainContent">
+            <div class="timer-section">
+                <div id="timerInputs" class="timer-inputs">
+                    <div class="input-group">
+                        <label for="ticketId">JIRA Ticket ID:</label>
+                        <input type="text" id="ticketId" placeholder="e.g., PROJ-123">
+                    </div>
+                    <div class="input-group">
+                        <label for="description">Description:</label>
+                        <textarea id="description" placeholder="What will you work on?"></textarea>
+                    </div>
+                </div>
+                <div class="timer-display">
+                    <span id="timeDisplay">00:00</span>
+                    <div class="timer-controls">
+                        <button id="startBtn" class="control-btn">Start</button>
+                        <button id="pauseBtn" class="control-btn" disabled>Pause</button>
+                        <button id="stopBtn" class="control-btn" disabled>Stop</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="time-logs-section">
+                <h2>Time Logs</h2>
+                <div id="timeLogsList" class="time-logs-list">
+                    <!-- Time logs will be inserted here -->
+                </div>
+                <div id="emptyState" class="empty-state hidden">
+                    You have not recorded any activities as yet.
+                </div>
+            </div>
+
+            <button id="submitAllBtn" class="submit-btn" disabled>Submit All Time Logs</button>
+        </div>
+
+        <!-- Time Log Edit Modal -->
+        <div id="editModal" class="modal hidden">
+            <div class="modal-content">
+                <h2>Edit Time Log</h2>
+                <div class="input-group">
+                    <label for="editTicketId">JIRA Ticket ID:</label>
+                    <input type="text" id="editTicketId" placeholder="e.g., PROJ-123">
+                </div>
+                <div class="input-group">
+                    <label for="editDescription">Description:</label>
+                    <textarea id="editDescription" placeholder="What did you work on?"></textarea>
+                </div>
+                <div class="input-group">
+                    <label for="editDate">Date:</label>
+                    <input type="date" id="editDate">
+                </div>
+                <div class="input-group">
+                    <label for="editStartTime">Start Time:</label>
+                    <input type="time" id="editStartTime">
+                </div>
+                <div class="input-group">
+                    <label for="editEndTime">End Time:</label>
+                    <input type="time" id="editEndTime">
+                </div>
+                <div class="modal-buttons">
+                    <button id="saveEditBtn" class="submit-btn">Save Changes</button>
+                    <button id="cancelEditBtn" class="cancel-btn">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="../js/popup.js"></script>
+</body>
+</html> 
